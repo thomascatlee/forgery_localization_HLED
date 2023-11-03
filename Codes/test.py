@@ -1,10 +1,11 @@
-
-import tensorflow as tf
-from tensorflow.python.client import device_lib
-#from tensorflow.python.ops import rnn, rnn_cell
-from tensorflow.contrib import rnn
 import numpy as np
-import tensorflow.contrib.slim as slim
+import tensorflow as tf2
+from tensorflow import keras
+import tf_slim as slim
+tf = tf2.compat.v1
+from tensorflow.python.ops.rnn import static_rnn
+tf.disable_v2_behavior()
+
 
 # to save the data in mat file
 import scipy.io as sio
@@ -20,7 +21,7 @@ import scipy.misc
 
 #tf.reset_default_graph()
 #os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
-log_device_placement = True
+log_device_placement = False
 # Parameters
 lr = 0.00003
 training_iters = 50000000
@@ -75,7 +76,7 @@ biases = {
 
 
 
-with tf.device('/gpu:1'):
+with tf.device('/cpu'):
 
     def conv_mask_gt(z): 
         # Get ones for each class instead of a number -- we need that
@@ -124,7 +125,7 @@ with tf.device('/gpu:1'):
 
         weights = np.zeros((filter_size,filter_size,number_of_classes,number_of_classes), dtype=np.float32)    
         upsample_kernel = upsample_filt(filter_size)    
-        for i in xrange(number_of_classes):        
+        for i in range(number_of_classes):
             weights[:, :, i, i] = upsample_kernel    
         return weights
 
@@ -173,8 +174,13 @@ with tf.device('/gpu:1'):
         # Split to get a list of 'n_steps' tensors of shape (batch_size, n_input)
         xCell=tf.unstack(patches, n_steps, 1)
         # 2 stacked layers
-        stacked_lstm_cell = tf.contrib.rnn.MultiRNNCell([tf.contrib.rnn.DropoutWrapper(rnn.BasicLSTMCell(n_hidden),output_keep_prob=1.0) for _ in range(2)] )
-        out, state = rnn.static_rnn(stacked_lstm_cell, xCell, dtype=tf.float32)
+        #stacked_lstm_cell = tf.contrib.rnn.MultiRNNCell([tf.contrib.rnn.DropoutWrapper(rnn.BasicLSTMCell(n_hidden),output_keep_prob=1.0) for _ in range(2)] )
+        #out, state = rnn.static_rnn(stacked_lstm_cell, xCell, dtype=tf.float32)
+        stacked_lstm_cell = tf.compat.v1.nn.rnn_cell.MultiRNNCell(
+            [tf.compat.v1.nn.rnn_cell.DropoutWrapper(tf.compat.v1.nn.rnn_cell.BasicLSTMCell(n_hidden),
+                                                     output_keep_prob=0.9) for _ in range(2)])
+        out, state = static_rnn(stacked_lstm_cell, xCell, dtype=tf.float32)
+
         # organizing the lstm output
         out=tf.gather(out,actual_ind)
         # convert to lstm output (64,batchSize,nbFilter)
@@ -258,14 +264,14 @@ saver = tf.train.Saver()
 
 config=tf.ConfigProto()
 config.allow_soft_placement=True
-config.log_device_placement=True
+config.log_device_placement=False
 config.gpu_options.allow_growth=True
 #config.gpu_options.per_process_gpu_memory_fraction = 0.4
 
 with tf.Session(config=config) as sess:
     sess.run(init) 
-    saver.restore(sess,'../model/final_model_nist.ckpt')	
-    print 'session starting .................!!!!' 
+    saver.restore(sess,'../model/final_model_nist.ckpt')
+    print ('session starting .................!!!!')
     subtract_mean=True
 
     # loading NC16 data
@@ -290,13 +296,13 @@ with tf.Session(config=config) as sess:
         nTx[imNb-n1]=tx[imNb] 
         nTy[imNb-n1]=ty[imNb]
         nTx1[imNb-n1]=freq4[imNb]
-    print np.shape(nTx)
-    print np.shape(nTy)
-    print np.shape(nTx1)
+    print (np.shape(nTx))
+    print (np.shape(nTy))
+    print (np.shape(nTx1))
     ty_prime=conv_mask_gt(nTy)
     final_predictions, final_probabilities,y2=sess.run([mask_pred,probabilities,mask_actual], feed_dict={input_layer: nTx, y:ty_prime, freqFeat: nTx1})
-    print np.shape(final_predictions)
-    print np.shape(final_probabilities)
+    print (np.shape(final_predictions))
+    print (np.shape(final_probabilities))
 
     #sio.savemat('pred_res.mat',{'img':nTx,'labels':nTy,'pred':final_predictions,'prob':final_probabilities,'gT':y2})
     nb = 0

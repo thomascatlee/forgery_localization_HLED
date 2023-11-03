@@ -23,12 +23,12 @@ if __name__ == '__main__':
     try:
         order = int(sys.argv[1])
     except:
-        print 'usage: {order}'
+        print ('usage: {order}')
         exit()
     if order < 1:
-        print 'Error: error must be greater than 0'
+        print ('Error: error must be greater than 0')
         exit()
     else:
         curve = hilbertCurve(order)
-        print curve
+        print (curve)
 
